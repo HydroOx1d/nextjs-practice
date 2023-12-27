@@ -7,22 +7,44 @@ import { z } from 'zod';
 
 const FormSchema = z.object({
   id: z.string(),
-  customerId: z.string(),
-  amount: z.coerce.number(),
-  status: z.enum(['pending', 'paid']),
+  customerId: z.string({
+    invalid_type_error: 'Please select a customer',
+  }),
+  amount: z.coerce.number().gt(0, 'Please enter an amount greater than $0'),
+  status: z.enum(['pending', 'paid'], {
+    invalid_type_error: 'Please select an invoice status',
+  }),
   date: z.string(),
 });
 
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
 
-export async function createInvoice(formData: FormData) {
+export type State = {
+  errors?: {
+    customerId?: string[];
+    amount?: string[];
+    status?: string[];
+  };
+  message?: string | null;
+};
+
+export async function createInvoice(prevState: State, formData: FormData) {
   const rawFormData = {
     customerId: formData.get('customerId'),
     amount: formData.get('amount'),
     status: formData.get('status'),
   };
 
-  const { amount, customerId, status } = CreateInvoice.parse(rawFormData);
+  const validatedData = CreateInvoice.safeParse(rawFormData);
+
+  if (!validatedData.success) {
+    return {
+      errors: validatedData.error.flatten().fieldErrors,
+      message: "errorrrr"
+    }
+  }
+
+  const { amount, customerId, status } = validatedData.data
 
   const amountInCents = amount * 100;
 
@@ -34,6 +56,7 @@ export async function createInvoice(formData: FormData) {
   } catch(error) {
     return {
       message: 'Database Error: Failed to Create Invoice.',
+      errors: {}
     };
   }
 
@@ -43,12 +66,21 @@ export async function createInvoice(formData: FormData) {
 
 const UpdateInvoice = FormSchema.omit({ id: true, date: true });
 
-export async function updateInvoice(id: string, formData: FormData) {
-  const { customerId, amount, status } = UpdateInvoice.parse({
+export async function updateInvoice(id: string, prevState: State, formData: FormData) {
+  const validatedData = UpdateInvoice.safeParse({
     customerId: formData.get('customerId'),
     amount: formData.get('amount'),
     status: formData.get('status'),
   });
+
+  if (!validatedData.success) {
+    return {
+      errors: validatedData.error.flatten().fieldErrors,
+      message: "errorrr"
+    }
+  }
+
+  const {amount, customerId, status} = validatedData.data
 
   const amountInCents = amount * 100;
 
